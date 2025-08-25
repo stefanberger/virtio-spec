@@ -1,0 +1,117 @@
+\section{TPM Device}\label{sec:Device Types / TPM Device}
+
+The virtio TPM device provides a virtio device interface for accessing a
+virtual TPM. It provides a mechanism to send a TPM command, which is to be
+executed in a user-chosen TPM locality, and receive a reponse along with a
+device status code.
+
+\subsection{Device ID}\label{sec:Device Types / TPM Device / Device ID}
+  46
+
+\subsection{Virtqueues}\label{sec:Device Types / TPM Device / Virtqueues}
+\begin{description}
+\item[4]
+\end{description}
+
+\subsection{Feature bits}\label{sec:Device Types / TPM Device / Feature bits}
+
+\subsection{Device configuration layout}\label{sec:Device Types / TPM Device / Device configuration layout}
+
+\begin{lstlisting}
+struct virtio_tpm_config {
+        /* TPM's buffer size (r/o); typically ~4k */
+        __virtio16 buffersize;
+        /* TPM version; 1 = TPM 1.2, 2 = TPM 2 */
+        __u8 tpm_version;
+} __attribute__((packed));
+\end{lstlisting}
+
+\begin{description}
+\item[\field{buffersize}] contains the TPM's buffersize. This is typically
+around 4kb.
+
+\item[\field{tpm_version}] contains the version of the TPM. '1' represents a
+TPM 1.2 and '2' a TPM 2.
+\end{description}
+
+\subsection{Device Initialization}\label{sec:Device Types / TPM Device / Device Initialization}
+
+\begin{enumerate}
+\item The virtqueue is initialized
+\item The driver SHOULD read the TPM version from the configuration space
+\item The driver SHOULD read the TPM's buffer size from the configuration
+space
+\end{enumerate}
+
+\subsection{Device Operation}\label{sec:Device Types / TPM Device / Device Operation}
+
+\subsection{Device Operation: Request Queue}\label{sec:Device Types / TPM Device / Device Operation: Request Queue}
+
+The driver enqueues a request consisting of the following 4 items:
+
+\begin{enumerate}
+\item A header
+\item The buffer holding the TPM command
+\item A sufficiently large buffer for the TPM response
+\item A structure describing the success or failure of the operation.
+\end{enumerate}
+
+The following data structure describes the header:
+\begin{lstlisting}
+struct virtio_tpm_cmd_header {
+	/* locality of the command */
+	uint8_t locty;
+} __attribute__((packed));
+\end{lstlisting}
+
+The \field{locty} allows a caller to specify the locality in which the TPM
+command is supposed to be executed. Typically values from 0-3 are supported,
+since locality 4 is reserved for hardware.
+
+The following data structure holds the status code in the response:
+\begin{lstlisting}
+struct virtio_tpm_cmd_result {
+	uint8_t status;
+} __attribute__((packed));
+\end{lstlisting}
+
+The status code shows potential failure reasons for executing the TPM
+command related to the buffers provided in the queue. The following status
+codes are defined:
+
+\begin{lstlisting}
+#define VIRTIO_TPM_CMD_RESULT_SUCCESS      0
+/* bad input such as buffers that are too short */
+#define VIRTIO_TPM_CMD_RESULT_BAD_INPUT    1
+\end{lstlisting}
+
+\drivernormative{\subsubsection}{Driver Operation}{Device Types / TPM Device / Device Operation}
+
+TPM device drivers are typically involved in interactions with the TPM for
+power management. This involves sending a command to the TPM so that it
+saves part of its current state to NVRAM (TPM 'Savestate'). On some
+platforms, such as x86_64, it is the task of the firmware (BIOS/UEFI) to send a
+command to the TPM for resuming (ACPI S3 resume) with the previously stored
+state. To simplify the implementation across different architectures, a
+virtio-tpm device driver MAY choose to send the necessary TPM Startup command
+from the kernel device driver.
+
+Further, a TPM device is typically initialized by the firmware of the
+platform. The firmware may use the TPM device for implementing trusted boot,
+which involves taking measurements (hashing) of firmware data and code,
+extending platform configuration registers (PCRs) of the TPM, and
+logging the measurements. The resulting log is typically made available to
+OS kernel drivers through one of the following mechanisms:
+
+\begin{enumerate}
+\item The TPM2 ACPI table holds fields describing the localtion and size of the log
+\item UEFI provides an API call for kernel drivers to get the log
+\item Platforms providing an OpenFirmware device tree may provide an API to get the
+log or make the log avaiable directly through the device tree (?).
+\end{enumerate}
+
+A platform kernel device driver implementor may choose any existing method
+to get access to this log. This may include support for TPM 2 ACPI tables,
+UEFI API call, etc.
+
+\drivernormative{\subsubsection}{Device Operation}{Device Types / TPM Device / Device Operation}
